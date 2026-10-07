@@ -1,0 +1,56 @@
+name: Package and publish test release
+on:
+  push:
+    tags: ['v[0-9]*']
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify tag matches app version
+        run: ./scripts/version.py validate --expect-tag "$RELEASE_TAG"
+      - run: ./scripts/test-version.py
+      - run: ./scripts/test.sh
+      - name: Build universal app and distribution packages
+        run: ./scripts/package-app.sh
+      - name: Retain packages if publication fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacClean-${{ github.ref_name }}
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/*.sha256
+          if-no-files-found: error
+      - name: Publish prerelease
+        shell: bash
+        run: |
+          cat > dist/release-notes.md <<'NOTES'
+          Personal Mac storage utility for testing on macOS 14 or later.
+          Packages support both Apple Silicon and Intel.
+
+          This build is locally signed and is not Apple-notarized. macOS may require
+          explicit approval to open it. The disk image supports drag-to-Applications
+          installation. Mole remains a separate dependency; its engine page provides setup.
+
+          Cache removal requires review and moves known caches to Finder Trash.
+          Container, worktree and project artifact removal is not enabled.
+          NOTES
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'This release already exists. Existing downloads will not be overwritten.' >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" dist/*.zip dist/*.dmg dist/*.sha256 \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease \
+            --title "MacClean $RELEASE_TAG" --notes-file dist/release-notes.md --generate-notes
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
