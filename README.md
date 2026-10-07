@@ -16,14 +16,15 @@ The packaged application is locally ad-hoc signed. It is not notarized for distr
 
 ## Implemented
 
-- Native sidebar and inspection/review workflow matching the design prototype.
+- Bounded native sidebar, findings list, details panel and review workflow, including meaningful empty and filtered states.
+- Matching app, Dock and launcher artwork, with optional System, Light and Dark appearance.
 - Mole executable detection, version verification and Homebrew installation-source detection.
 - Explicit update checks against Homebrew's published formula. Reviewed install/upgrade through existing Homebrew; custom installations retain their own update route.
 - Developer cache inventory for Go, npm, Python/pip/uv, Cargo, Gradle, Xcode, NuGet, Composer and Homebrew where standard locations exist.
 - Reviewed cache removal to Finder's Trash, with approved-path checks, symlink refusal, current owner-process checks and scan-identity revalidation. No automatic emptying of Trash.
 - Read-only inspection of the current Docker and Podman connections, discovered container tools, repository worktrees and common project artifacts.
 - Mole folder analysis using JSON, a system snapshot, and a non-destructive cleanup preview.
-- Persistent scan roots, exclusions and per-operation history under `~/Library/Application Support/MacClean`.
+- Persistent custom Mole executable, scan roots, exclusions and per-operation history under `~/Library/Application Support/MacClean`.
 
 ## Current boundaries
 
@@ -37,13 +38,15 @@ This is the first implementation, not full feature parity with the design.
 - Long subprocesses have timeouts; there is no user-facing cancellation yet. Package-manager actions cannot request an administrator password and will report failure when interaction is needed.
 - Permission-restricted scans may be partial. Review scan notices and errors. Full Disk Access is optional and granted in macOS Settings.
 
-No actual user cleanup or package installation is run during development verification. Tests use temporary fixtures and check rejection paths, parser behavior, and subprocess execution.
+No actual user cleanup or package installation is run during development verification. All 38 automated checks cover temporary fixtures, cleanup rejection paths, provider failures, state persistence and subprocess execution. A disposable fixture exercises actual Finder Trash and restoration. Install/upgrade tests use controlled commands. See [review and verification](docs/REVIEW.md).
 
 ## Repository layout
 
 - `Sources/MacClean`: native application and views.
 - `Sources/MacCleanCore`: command execution, Mole integration, inventory, and cleanup policy.
-- `Tests/MacCleanCoreTests`: meaningful checks around unsafe deletion and provider boundaries.
+- `Tests/MacCleanCoreTests`: deletion protections and provider boundaries.
+- `Tests/MacCleanTests`: application workflows, persistence and resource loading.
+- `docs/BRAND.md`: artwork source and reproducible icon packaging.
 - `docs/design`: reviewed browser prototype and functionality proposal; demonstration data is not current machine inventory.
 - `scripts/build-app.sh`: release executable and local `.app` packaging.
 

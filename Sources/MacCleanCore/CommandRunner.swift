@@ -6,7 +6,21 @@ public struct CommandResult: Sendable {
     public let stderr: String
     public let exitCode: Int32
     public let timedOut: Bool
+    public init(stdout:String,stderr:String="",exitCode:Int32=0,timedOut:Bool=false) { self.stdout=stdout;self.stderr=stderr;self.exitCode=exitCode;self.timedOut=timedOut }
     public var succeeded: Bool { exitCode == 0 && !timedOut }
+}
+public protocol CommandExecuting:Sendable {
+    func run(_ executable:String,_ arguments:[String],timeout:TimeInterval,environment:[String:String]) async throws -> CommandResult
+}
+public extension CommandExecuting {
+    func run(_ executable:String,_ arguments:[String],timeout:TimeInterval=30) async throws -> CommandResult {
+        try await run(executable,arguments,timeout:timeout,environment:[:])
+    }
+    func checked(_ executable:String,_ arguments:[String],timeout:TimeInterval=30) async throws -> String {
+        let result=try await run(executable,arguments,timeout:timeout)
+        guard result.succeeded else { throw CommandError.failed(result.timedOut ? "The command timed out. Try again after checking the tool." : String((result.stderr.isEmpty ? result.stdout : result.stderr).suffix(4000))) }
+        return result.stdout
+    }
 }
 public enum CommandError: LocalizedError {
     case failed(String)
@@ -14,7 +28,7 @@ public enum CommandError: LocalizedError {
 }
 /// Separate pipe readers prevent a verbose subprocess from blocking on a full pipe.
 /// Commands always have a bounded lifetime and never run through a shell.
-public final class CommandRunner: @unchecked Sendable {
+public final class CommandRunner: CommandExecuting, @unchecked Sendable {
     public init() {}
     public static var environment: [String: String] {
         var env = ProcessInfo.processInfo.environment

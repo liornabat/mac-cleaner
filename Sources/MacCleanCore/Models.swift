@@ -12,9 +12,10 @@ public struct Finding: Identifiable, Codable, Hashable, Sendable {
     public var blockedReason: String?
     public var modifiedAt: Date?
     public var fileIdentity: UInt64?
+    public var engineReport:String?
     public var canClean: Bool { group == .caches && blockedReason == nil && bytes != nil }
-    public init(title: String, tool: String, path: String, bytes: Int64?, group: FindingGroup, consequence: String, blockedReason: String? = nil, modifiedAt: Date? = nil, fileIdentity: UInt64? = nil) {
-        self.title=title; self.tool=tool; self.path=path; self.bytes=bytes; self.group=group; self.consequence=consequence; self.blockedReason=blockedReason; self.modifiedAt=modifiedAt; self.fileIdentity=fileIdentity
+    public init(title: String, tool: String, path: String, bytes: Int64?, group: FindingGroup, consequence: String, blockedReason: String? = nil, modifiedAt: Date? = nil, fileIdentity: UInt64? = nil,engineReport:String? = nil) {
+        self.title=title; self.tool=tool; self.path=path; self.bytes=bytes; self.group=group; self.consequence=consequence; self.blockedReason=blockedReason; self.modifiedAt=modifiedAt; self.fileIdentity=fileIdentity;self.engineReport=engineReport
     }
 }
 public struct OperationRecord: Identifiable, Codable, Sendable {
@@ -23,7 +24,8 @@ public struct OperationRecord: Identifiable, Codable, Sendable {
     public var title: String
     public var outcome: String
     public var detail: String
-    public init(title:String,outcome:String,detail:String) { self.title=title;self.outcome=outcome;self.detail=detail }
+    public var recoveryPath:String?
+    public init(title:String,outcome:String,detail:String,recoveryPath:String?=nil) { self.title=title;self.outcome=outcome;self.detail=detail;self.recoveryPath=recoveryPath }
 }
 public struct EngineInfo: Sendable {
     public var path: String?
@@ -51,7 +53,7 @@ public enum Versions {
         func components(_ s: String) -> [Int]? {
             let trimmed = s.hasPrefix("v") ? String(s.dropFirst()) : s
             let pieces = trimmed.split(separator: ".", omittingEmptySubsequences: false)
-            guard pieces.count >= 2, pieces.allSatisfy({ Int($0) != nil }) else { return nil }
+            guard pieces.count >= 2, pieces.allSatisfy({ !$0.isEmpty && $0.allSatisfy{"0123456789".contains($0)} && Int($0) != nil }) else { return nil }
             return pieces.compactMap { Int($0) }
         }
         guard let a=components(candidate), let b=components(installed) else { return nil }

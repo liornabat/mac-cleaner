@@ -22,15 +22,27 @@ public enum CacheCatalog {
     }
 }
 public struct ScanResult: Sendable { public var findings: [Finding]; public var notices: [String] }
+public enum ProcessOwners {
+    public static func isRunning(_ owners:[String],in processes:Set<String>)->Bool {
+        func normalized(_ name:String)->String {
+            let base=URL(fileURLWithPath:name).lastPathComponent.lowercased()
+            return base.replacingOccurrences(of:"[0-9.]+$",with:"",options:.regularExpression)
+        }
+        let active=Set(processes.map(normalized))
+        return owners.contains { active.contains(normalized($0)) }
+    }
+}
 public final class InventoryService: Sendable {
-    private let runner=CommandRunner()
-    public init() {}
+    private let runner:any CommandExecuting
+    private let locate:@Sendable (String)->String?
+    public init(runner:any CommandExecuting=CommandRunner(),locate:@escaping @Sendable (String)->String? = {CommandRunner.locate($0)}) { self.runner=runner;self.locate=locate }
     public func scan(home: URL = FileManager.default.homeDirectoryForCurrentUser, roots: [String], exclusions: Set<String>, budget:TimeInterval=60, progress:@Sendable (String) async -> Void = { _ in }) async -> ScanResult {
         var findings=[Finding](), notices=[String]()
         let deadline=Date().addingTimeInterval(budget)
         func finish() -> ScanResult {
             if Date() >= deadline { notices.append("The scan reached its time budget. Results are partial; narrow the project roots and scan again for more coverage.") }
-            return ScanResult(findings:findings,notices:notices)
+            var seen=Set<String>()
+            return ScanResult(findings:findings.filter { seen.insert(URL(fileURLWithPath:$0.path).standardizedFileURL.path).inserted },notices:Array(Set(notices)).sorted())
         }
         let running=await runningProcesses()
         for spec in CacheCatalog.specs {
@@ -39,7 +51,7 @@ public final class InventoryService: Sendable {
             let url=home.appendingPathComponent(spec.relativePath)
             guard FileManager.default.fileExists(atPath:url.path), !exclusions.contains(url.path) else { continue }
             let attrs=try? FileManager.default.attributesOfItem(atPath:url.path)
-            let blocked=spec.processes.contains(where:running.contains) ? "The owning tool is running. Close it, then scan again." : nil
+            let blocked=ProcessOwners.isRunning(spec.processes,in:running) ? "The owning tool is running. Close it, then scan again." : nil
             let measurement=await size(url.path)
             let safety=CleanupPolicy.validate(path:url.path,home:home)
             findings.append(Finding(title:spec.title,tool:spec.tool,path:url.path,bytes:measurement,group:.caches,consequence:spec.consequence,blockedReason:safety ?? blocked ?? (measurement == nil ? "The folder could not be measured." : nil),modifiedAt:attrs?[.modificationDate] as? Date,fileIdentity:(attrs?[.systemFileNumber] as? NSNumber)?.uint64Value))
@@ -48,25 +60,27 @@ public final class InventoryService: Sendable {
         for tool in ["docker","podman"] {
             if Date() >= deadline { return finish() }
             await progress("Inspecting " + tool.capitalized + " connection…")
-            guard let binary=CommandRunner.locate(tool) else { continue }
+            let path=tool+"://current-connection"
+            guard !exclusions.contains(path),let binary=locate(tool) else { continue }
             let r=try? await runner.run(binary,["system","df","--format","json"],timeout:15)
             if let r, r.succeeded {
                 let counts=String(r.stdout.prefix(6000))
-                findings.append(Finding(title:"\(tool.capitalized) storage",tool:tool.capitalized,path:tool+"://current-connection",bytes:nil,group:.containers,consequence:"Images, build caches, containers and volumes require engine-specific reference checks. Shared layers and virtual-machine disks have different accounting.\n\n"+counts,blockedReason:"Inspection only. Container deletion is not enabled in this first build."))
+                findings.append(Finding(title:"\(tool.capitalized) storage",tool:tool.capitalized,path:path,bytes:nil,group:.containers,consequence:"Images, build caches, containers and volumes require engine-specific reference checks. Shared layers and virtual-machine disks have different accounting.",blockedReason:"Inspection only. Container deletion is not enabled in this first build.",engineReport:counts))
             } else { notices.append("\(tool.capitalized) is installed but its current connection is unavailable. No machine was started.") }
         }
-        for tool in ["colima","limactl","nerdctl"] where CommandRunner.locate(tool) != nil { notices.append("\(tool) was found. Inspect its underlying engine through Docker or Podman where configured; additional contexts are not yet scanned.") }
+        for tool in ["colima","limactl","nerdctl"] where locate(tool) != nil { notices.append("\(tool) was found. Inspect its underlying engine through Docker or Podman where configured; additional contexts are not yet scanned.") }
         var seenRepos=Set<String>()
         for root in roots {
             if Date() >= deadline { return finish() }
             let rootURL=URL(fileURLWithPath:root).standardizedFileURL
             guard FileManager.default.fileExists(atPath:rootURL.path) else { notices.append("Scan root unavailable: \(root)"); continue }
-            let repositories=findRepositories(rootURL,limit:60)
+            let discovery=findRepositories(rootURL,limit:60,deadline:deadline)
+            let repositories=discovery.repositories;notices.append(contentsOf:discovery.notices)
             if repositories.count == 60 { notices.append("Repository discovery reached its 60-repository limit under \(root). Narrow this root for a complete scan.") }
             for repo in repositories where seenRepos.insert(repo.path).inserted {
                 if Date() >= deadline { return finish() }
                 await progress("Inspecting project " + repo.lastPathComponent + "…")
-                guard let git=CommandRunner.locate("git") else { continue }
+                guard let git=locate("git") else { notices.append("Git was not found. Project worktrees could not be inspected.");continue }
                 let result=try? await runner.run(git,["-C",repo.path,"worktree","list","--porcelain","-z"],timeout:8)
                 guard let result, result.succeeded else { notices.append("Could not inspect Git worktrees under \(repo.path)."); continue }
                 for worktree in WorktreeParser.parse(result.stdout) where worktree.path != repo.path && !exclusions.contains(worktree.path) {
@@ -94,18 +108,26 @@ public final class InventoryService: Sendable {
         guard let text=try? await runner.checked("/bin/ps",["-axo","comm="],timeout:5) else { return Set(CacheCatalog.specs.flatMap(\.processes)) }
         return Set(text.split(separator:"\n").map { URL(fileURLWithPath:String($0).trimmingCharacters(in:.whitespaces)).lastPathComponent })
     }
-    private func findRepositories(_ root:URL,limit:Int) -> [URL] {
-        var result=[URL](),queue=[(root,0)]
-        while !queue.isEmpty && result.count<limit && queue.count<4000 {
+    private func findRepositories(_ root:URL,limit:Int,deadline:Date) -> (repositories:[URL],notices:[String]) {
+        var result=[URL](),queue=[(root,0)],notices=[String]()
+        while !queue.isEmpty && result.count<limit && Date()<deadline {
             let (url,depth)=queue.removeFirst()
             if FileManager.default.fileExists(atPath:url.appendingPathComponent(".git").path) { result.append(url); continue }
-            guard depth<3,let children=try? FileManager.default.contentsOfDirectory(at:url,includingPropertiesForKeys:[.isDirectoryKey,.isSymbolicLinkKey],options:.skipsHiddenFiles) else { continue }
-            for child in children where !["node_modules","vendor","target",".build"].contains(child.lastPathComponent) {
-                let values=try? child.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey])
-                if values?.isDirectory == true && values?.isSymbolicLink != true { queue.append((child,depth+1)) }
+            guard depth<3 else {continue}
+            do {
+                let children=try FileManager.default.contentsOfDirectory(at:url,includingPropertiesForKeys:[.isDirectoryKey,.isSymbolicLinkKey],options:.skipsHiddenFiles)
+                for child in children.sorted(by:{$0.path<$1.path}) where !["node_modules","vendor","target",".build"].contains(child.lastPathComponent) {
+                    do {
+                        let values=try child.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey])
+                        if values.isDirectory == true && values.isSymbolicLink != true {
+                            guard queue.count<4000 else {notices.append("Repository discovery reached its directory limit under \(root.path). Coverage is partial.");continue}
+                            queue.append((child,depth+1))
+                        }
+                    } catch { notices.append("Could not inspect \(child.path): \(error.localizedDescription)") }
+                }
+            } catch { notices.append("Could not read scan directory \(url.path): \(error.localizedDescription)") }
             }
-        }
-        return result
+        return (result,notices)
     }
 }
 public struct Worktree: Sendable { public var path:String; public var branch:String?; public var locked:Bool }

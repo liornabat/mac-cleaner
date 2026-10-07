@@ -7,6 +7,7 @@ import Foundation
         expectEqual(Versions.isNewer("1.100.0",than:"1.56.0"),true)
         expectEqual(Versions.isNewer("v1.56.0",than:"1.56"),false)
         expectNil(Versions.isNewer("nightly",than:"1.56.0"))
+        expectNil(Versions.isNewer("1.-56.0",than:"1.56.0"))
         expectEqual(MoleService.parseVersion("Mole version 1.56.0\nmacOS: 27.0"),"1.56.0")
         expectNil(MoleService.parseVersion("Other app version 1.56.0"))
     }

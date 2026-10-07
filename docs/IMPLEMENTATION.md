@@ -22,4 +22,10 @@ The native application is the implementation source. The HTML mockup remains a d
 
 ## Native appearance
 
-The app follows the Mac's light or dark appearance. Secondary actions use an adaptive blue tint, while prominent actions use white text on dark blue. Unknown inventory sizes remain explicit; displayed totals are measured inventory, not promised recovered space. Removal review states that Trash retains files until emptied.
+The app defaults to the Mac's appearance and offers persisted System, Light and Dark choices. Opaque adaptive text colors keep small secondary text readable. Secondary actions use an adaptive blue tint, while prominent actions use white text on dark blue. Unknown inventory sizes remain explicit; displayed totals are measured inventory, not promised recovered space. Removal review states that Trash retains files until emptied.
+
+The root workspace uses a bounded SwiftUI stack with an optional 220-point sidebar. Findings have a flexible list and a 280-point inspector. Empty and filtered lists remain inside the content region. Scan notices and failure diagnostics have bounded scrolling regions. The native window minimum is 960 × 650 points.
+
+## Verification seams
+
+Command execution, executable location, process ownership and Trash handling are injectable. Tests exercise missing/incompatible engines, package success/failure, literal-path reads, non-destructive preview, exclusions, duplicate worktree discovery, active owners and partial cleanup. Model tests cover busy-operation refusal, persisted custom engine selection, appearance and corrupt-state backup. The packaged app uses standard PNG/icon resources; development uses the Swift Package Manager resource bundle.
