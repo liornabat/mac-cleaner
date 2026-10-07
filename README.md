@@ -1,1 +1,50 @@
-# mac-cleaner
+# MacClean
+
+A native macOS utility for personal storage inspection and reviewed developer-cache cleanup. Built with SwiftUI for macOS 14 or later, using an externally installed Mole engine. No Mole source or binary is bundled.
+
+## Build and run
+
+Requires Swift 6 and Apple's Command Line Tools. No Xcode project or external Swift package dependency is required.
+
+```sh
+./scripts/test.sh
+./scripts/build-app.sh
+open dist/MacClean.app
+```
+
+The packaged application is locally ad-hoc signed. It is not notarized for distribution. You can also open `Package.swift` in Xcode or run `swift run MacClean` for development.
+
+## Implemented
+
+- Native sidebar and inspection/review workflow matching the design prototype.
+- Mole executable detection, version verification and Homebrew installation-source detection.
+- Explicit update checks against Homebrew's published formula. Reviewed install/upgrade through existing Homebrew; custom installations retain their own update route.
+- Developer cache inventory for Go, npm, Python/pip/uv, Cargo, Gradle, Xcode, NuGet, Composer and Homebrew where standard locations exist.
+- Reviewed cache removal to Finder's Trash, with approved-path checks, symlink refusal, current owner-process checks and scan-identity revalidation. No automatic emptying of Trash.
+- Read-only inspection of the current Docker and Podman connections, discovered container tools, repository worktrees and common project artifacts.
+- Mole folder analysis using JSON, a system snapshot, and a non-destructive cleanup preview.
+- Persistent scan roots, exclusions and per-operation history under `~/Library/Application Support/MacClean`.
+
+## Current boundaries
+
+This is the first implementation, not full feature parity with the design.
+
+- Mole 1.56 does not support arbitrary selected-file cleanup. MacClean invokes its `clean --dry-run` report only; selected developer caches use their own bounded Trash operation rather than broad `mo clean`.
+- Container, worktree and project-artifact deletion is inspection-only. Discovery does not start virtual machines. Only each CLI's current connection is scanned; additional contexts/namespaces, full OrbStack/Rancher Desktop/Lima coverage and shared-endpoint deduplication still need implementation.
+- Cache roots are a curated initial catalog. Custom language-tool locations are not yet discovered, and cache files can be recreated while a tool resumes running. Trash gives recovery until emptied; it does not immediately reclaim space.
+- Scans have a 60-second budget and report partial results on expiry. Git discovery searches three directory levels and at most 60 repositories per root. It reports clean/dirty status but does not qualify ignored data, unique commits or coding-agent ownership for removal.
+- System status is a manually refreshed snapshot. App uninstallation, maintenance execution, automatic schedules and continuous monitoring are not yet implemented.
+- Long subprocesses have timeouts; there is no user-facing cancellation yet. Package-manager actions cannot request an administrator password and will report failure when interaction is needed.
+- Permission-restricted scans may be partial. Review scan notices and errors. Full Disk Access is optional and granted in macOS Settings.
+
+No actual user cleanup or package installation is run during development verification. Tests use temporary fixtures and check rejection paths, parser behavior, and subprocess execution.
+
+## Repository layout
+
+- `Sources/MacClean`: native application and views.
+- `Sources/MacCleanCore`: command execution, Mole integration, inventory, and cleanup policy.
+- `Tests/MacCleanCoreTests`: meaningful checks around unsafe deletion and provider boundaries.
+- `docs/design`: reviewed browser prototype and functionality proposal; demonstration data is not current machine inventory.
+- `scripts/build-app.sh`: release executable and local `.app` packaging.
+
+The repository code is Apache-2.0 licensed. Mole remains a separately installed external tool governed by its own license.

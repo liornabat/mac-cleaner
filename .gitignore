@@ -60,3 +60,10 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Native development outputs
+.build/
+.swiftpm/
+dist/
+.idea/
+.DS_Store
