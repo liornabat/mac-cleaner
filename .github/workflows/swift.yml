@@ -1,9 +1,16 @@
 name: Native app checks
-on: [push, pull_request]
+on:
+  push:
+    branches: ['**']
+  pull_request:
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - run: ./scripts/version.py validate
+      - run: ./scripts/test-version.py
       - run: ./scripts/test.sh
       - run: ./scripts/build-app.sh

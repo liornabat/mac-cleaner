@@ -19,7 +19,7 @@ struct ContentView:View {
           if sidebarVisible {
             VStack(alignment:.leading,spacing:12) {
                 HStack(spacing:8) { Image(nsImage:BrandAssets.icon).resizable().frame(width:32,height:32).accessibilityHidden(true);Text("MacClean").font(.title2.bold()) }.padding(.horizontal,14).padding(.top,20)
-                Text("Personal workspace").font(.caption).foregroundStyle(AppPalette.secondaryText).padding(.horizontal,14)
+                Text(AppVersion.current.display).textSelection(.enabled).accessibilityLabel("MacClean " + AppVersion.current.display).font(.caption).foregroundStyle(AppPalette.secondaryText).padding(.horizontal,14)
                 List(AppSection.allCases,selection:$model.section) { section in Label(section.rawValue,systemImage:section.icon).tag(section) }.listStyle(.sidebar).scrollContentBackground(.hidden)
                 VStack(alignment:.leading,spacing:5) {
                     Label(model.engine.ready ? "Mole \(model.engine.version ?? "")" : "Mole needs attention",systemImage:model.engine.ready ? "checkmark.circle" : "exclamationmark.circle")

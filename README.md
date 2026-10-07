@@ -14,6 +14,18 @@ open dist/MacClean.app
 
 The packaged application is locally ad-hoc signed. It is not notarized for distribution. You can also open `Package.swift` in Xcode or run `swift run MacClean` for development.
 
+## Versions and downloads
+
+The app shows its release version and build number in the sidebar and About window. Both come from `Sources/MacClean/Resources/AppVersion.json`, which also drives the app bundle, `v0.1.0` repository tag and release package names.
+
+[Download test releases](https://github.com/liornabat/mac-cleaner/releases) or build locally. These builds are locally signed and not Apple-notarized; macOS can require explicit approval to open downloads. Mole remains separately installed. Read [the release instructions](docs/RELEASING.md) and [changelog](CHANGELOG.md).
+
+```sh
+./scripts/version.py bump patch  # Increment version and build, then commit
+./scripts/tag-release.sh         # Test, create/push tag; GitHub Actions publishes packages
+./scripts/package-app.sh         # Build universal packages locally without publishing
+```
+
 ## Implemented
 
 - Bounded native sidebar, findings list, details panel and review workflow, including meaningful empty and filtered states.
@@ -38,7 +50,7 @@ This is the first implementation, not full feature parity with the design.
 - Long subprocesses have timeouts; there is no user-facing cancellation yet. Package-manager actions cannot request an administrator password and will report failure when interaction is needed.
 - Permission-restricted scans may be partial. Review scan notices and errors. Full Disk Access is optional and granted in macOS Settings.
 
-No actual user cleanup or package installation is run during development verification. All 38 automated checks cover temporary fixtures, cleanup rejection paths, provider failures, state persistence and subprocess execution. A disposable fixture exercises actual Finder Trash and restoration. Install/upgrade tests use controlled commands. See [review and verification](docs/REVIEW.md).
+No actual user cleanup or package installation is run during development verification. All 39 automated checks cover temporary fixtures, cleanup rejection paths, provider failures, state persistence and subprocess execution. A disposable fixture exercises actual Finder Trash and restoration. Install/upgrade tests use controlled commands. See [review and verification](docs/REVIEW.md).
 
 ## Repository layout
 
@@ -49,5 +61,8 @@ No actual user cleanup or package installation is run during development verific
 - `docs/BRAND.md`: artwork source and reproducible icon packaging.
 - `docs/design`: reviewed browser prototype and functionality proposal; demonstration data is not current machine inventory.
 - `scripts/build-app.sh`: release executable and local `.app` packaging.
+- `scripts/version.py`: single-source version validation and increments.
+- `scripts/package-app.sh`: universal application, disk image, ZIP and checksums.
+- `.github/workflows/release.yml`: validated tags and downloadable prereleases.
 
 The repository code is Apache-2.0 licensed. Mole remains a separately installed external tool governed by its own license.

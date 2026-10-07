@@ -66,6 +66,14 @@ private actor ModelCommands:CommandExecuting {
         model.show(.caches);#expect(model.section == .cleanup)
         model.show(.projects);#expect(model.section == .projects)
     }
+    @Test func appVersionResourceMatchesRepositoryMetadata() throws {
+        let root=URL(fileURLWithPath:#filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let data=try Data(contentsOf:root.appendingPathComponent("Sources/MacClean/Resources/AppVersion.json"))
+        let metadata=try JSONDecoder().decode(AppVersion.Metadata.self,from:data)
+        #expect(AppVersion.load().version == metadata.version)
+        #expect(AppVersion.load().build == String(metadata.build))
+        #expect(AppVersion.load().display.contains("build"))
+    }
     @Test func bundledBrandArtworkLoadsForDevelopment() {
         #expect(BrandAssets.icon.isValid)
         #expect(BrandAssets.icon.size.width > 0 && BrandAssets.icon.size.height > 0)

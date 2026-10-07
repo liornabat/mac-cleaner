@@ -8,6 +8,9 @@ import AppKit
         WindowGroup("MacClean") { ContentView().environmentObject(model).frame(minWidth:960,minHeight:650).task { if model.engine.path == nil { model.detect() } } }
         .defaultSize(width:1220,height:820)
         .commands {
+            CommandGroup(replacing:.appInfo) { Button("About MacClean") {
+                NSApp.orderFrontStandardAboutPanel(options:[.applicationVersion:AppVersion.current.version,.version:AppVersion.current.build,.applicationIcon:BrandAssets.icon])
+            } }
             CommandGroup(replacing:.newItem) {}
             CommandMenu("Scan") { Button("Scan my Mac",action:model.scan).keyboardShortcut("r",modifiers:.command).disabled(model.busy) }
         }

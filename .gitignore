@@ -67,3 +67,7 @@ fastlane/test_output
 dist/
 .idea/
 .DS_Store
+
+# Python release tooling
+__pycache__/
+*.pyc
